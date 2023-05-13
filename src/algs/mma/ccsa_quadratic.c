@@ -76,7 +76,7 @@ typedef struct {
 
 static double sqr(double x) { return x * x; }
 
-static double dual_func(unsigned m, const double *y, double *grad, void *d_)
+static double dual_func_debug(unsigned m, const double *y, double *grad, void *d_, int debug)
 {
      dual_data *d = (dual_data *) d_;
      unsigned n = d->n;
@@ -100,6 +100,8 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
      for (j = 0; j < n; ++j) {
 	  double u, v, dx, sigma2, dx2, dx2sig;
 
+	  if (debug) printf("j=%d\n", j);
+
 	  /* first, compute xcur[j] = x+dx for y.  Because this objective is
 	     separable, we can minimize over x analytically, and the minimum
 	     dx is given by the solution of a linear equation
@@ -115,11 +117,17 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 
 	  u = rho;
 	  v = dfdx[j];
+	  if (debug) printf("dfdx: %g\n", dfdx[j]);
 	  for (i = 0; i < m; ++i) {
-	       u += rhoc[i] * y[i];
+	       u += rhoc[i] * y[i]; // u = dot(rho_all, lambda_all=y_all)
 	       v += dfcdx[i*n + j] * y[i];
+		   if (debug) printf("y: %g\n", y[i]);
+		   if (debug) printf("dfcdx: %g\n", dfcdx[i*n + j]);
 	  }
 	  dx = -(sigma2 = sqr(sigma[j])) * v/u;
+	  if (debug) printf("dx = %g\n", dx);
+	  if (debug) printf("u = %g\n", u);
+	  if (debug) printf("v = %g\n", v);
 
 	  /* if dx is out of bounds, we are guaranteed by convexity
 	     that the minimum is at the bound on the side of dx */
@@ -145,6 +153,11 @@ static double dual_func(unsigned m, const double *y, double *grad, void *d_)
 	we negate because we are maximizing: */
      if (grad) for (i = 0; i < m; ++i) grad[i] = -gcval[i];
      return -val;
+}
+
+static double dual_func(unsigned m, const double *y, double *grad, void *d_)
+{
+	return dual_func_debug(m, y, grad, d_, 0);
 }
 
 /***********************************************************************/
@@ -405,7 +418,7 @@ nlopt_result ccsa_quadratic_minimize(
 			 goto done;
 		    }
 
-		    dual_func(m, y, NULL, &dd); /* evaluate final xcur etc. */
+		    dual_func_debug(m, y, NULL, &dd, 1); /* evaluate final xcur etc. !!! */ 
 	       }
 	       else {
 		    double pre_min;
@@ -441,6 +454,9 @@ nlopt_result ccsa_quadratic_minimize(
 		    for (i = 0; i < MIN(verbose, m); ++i)
 			 printf("    CCSA y[%u]=%g, gc[%u]=%g\n",
 				i, y[i], i, dd.gcval[i]);
+		    for (j = 0; j < n; ++j)
+			 printf("    CCSA xcur[%u]=%g\n",
+				j, xcur[j]);
 	       }
 
 	       fcur = f(n, xcur, dfdx_cur, f_data);
